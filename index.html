@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agente de IA - Projeto Acadêmico</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        .container {
+            max-width: 700px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #0056b3;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        textarea {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box; /* Garante que padding e border estão incluídos na largura */
+            font-size: 16px;
+            resize: vertical; /* Permite redimensionar verticalmente */
+            min-height: 100px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 18px;
+            display: block;
+            width: 100%;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .response-section {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #e9ecef;
+            border-left: 5px solid #007bff;
+            border-radius: 4px;
+        }
+        .response-section h2 {
+            margin-top: 0;
+            color: #0056b3;
+            margin-bottom: 15px;
+        }
+        #agentResponseText {
+            white-space: pre-wrap; /* Preserva quebras de linha e espaços no texto */
+            word-wrap: break-word; /* Quebra palavras longas */
+            color: #555;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        .loading {
+            font-style: italic;
+            color: #888;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Pergunte ao seu Agente de IA</h1>
+        <form id="questionForm">
+            <label for="userQuestion">Digite sua pergunta:</label>
+            <textarea id="userQuestion" name="pergunta" placeholder="Ex: Quais os principais tópicos abordados no documento X?" required></textarea>
+            <button type="submit">Obter Resposta</button>
+        </form>
+
+        <div class="response-section">
+            <h2>Resposta do Agente:</h2>
+            <p id="agentResponseText" class="loading">Aguardando sua pergunta...</p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('questionForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            const userQuestion = document.getElementById('userQuestion').value;
+            const agentResponseText = document.getElementById('agentResponseText');
+
+            agentResponseText.innerText = "Processando sua pergunta... Por favor, aguarde.";
+            agentResponseText.classList.remove('error');
+            agentResponseText.classList.add('loading');
+
+            const webhookUrl = 'http://localhost:5678/webhook-test/pergunta'; // <-- CONFIRME ESTA URL COM SEU N8N!
+
+            try {
+                const response = await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ pergunta: userQuestion })
+                });
+
+                console.log('>>> Resposta HTTP Recebida:', response);
+
+                if (!response.ok) {
+                    const errorBody = await response.text();
+                    console.error('>>> Erro HTTP (status não OK):', response.status, response.statusText, 'Corpo:', errorBody);
+                    agentResponseText.innerText = `Erro do servidor: ${response.status} ${response.statusText}. Detalhes no console.`;
+                    agentResponseText.classList.add('error');
+                    return;
+                }
+
+                const responseText = await response.text();
+                console.log('>>> Resposta do n8n (texto bruto):', responseText);
+
+                let data = null;
+                try {
+                    data = JSON.parse(responseText);
+                    console.log('>>> Resposta do n8n (JSON parseado):', data);
+                } catch (jsonParseError) {
+                    console.error('>>> ERRO: Falha ao parsear resposta do n8n como JSON. A resposta não é um JSON válido.', jsonParseError);
+                    agentResponseText.innerText = `Erro de comunicação: Resposta inválida do servidor. Verifique o console.`;
+                    agentResponseText.classList.add('error');
+                    return;
+                }
+
+                agentResponseText.classList.remove('loading');
+
+                // VERIFICAÇÃO CRÍTICA: A chave 'respostaAgente' DEVE ESTAR PRESENTE NO JSON DE RETORNO DO N8N
+                if (data && typeof data === 'object' && data.respostaAgente !== undefined) {
+                    agentResponseText.innerText = data.respostaAgente;
+                } else {
+                    agentResponseText.innerText = "Nenhuma resposta válida encontrada na chave 'respostaAgente'. Verifique o console para a resposta completa.";
+                    agentResponseText.classList.add('error');
+                    console.error(">>> Resposta do n8n não contém a chave esperada 'respostaAgente' ou é inválida:", data);
+                }
+
+            } catch (error) {
+                console.error('>>> Erro crítico na requisição ou no script:', error);
+                agentResponseText.innerText = `Erro ao conectar ou receber resposta: ${error.message || error}`;
+                agentResponseText.classList.add('error');
+            }
+        });
+    </script>
+</body>
+</html>
